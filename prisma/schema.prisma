@@ -1,0 +1,234 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String
+  description String?
+  imageUrl    String?
+  isActive    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  seasons  Season[]
+  listings Listing[]
+
+  @@index([slug])
+  @@index([isActive, sortOrder])
+  @@map("categories")
+}
+
+model Season {
+  id         String    @id @default(cuid())
+  number     Int
+  categoryId String
+  category   Category  @relation(fields: [categoryId], references: [id])
+  startDate  DateTime
+  endDate    DateTime
+  status     SeasonStatus @default(UPCOMING)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  listings Listing[]
+
+  @@unique([categoryId, number])
+  @@index([status])
+  @@index([categoryId, status])
+  @@map("seasons")
+}
+
+enum SeasonStatus {
+  UPCOMING
+  ACTIVE
+  ENDED
+}
+
+model Listing {
+  id         String   @id @default(cuid())
+  categoryId String
+  seasonId   String
+  category   Category @relation(fields: [categoryId], references: [id])
+  season     Season   @relation(fields: [seasonId], references: [id])
+  name       String
+  slug       String
+  description String?
+  imageUrl   String?
+  websiteUrl String?
+  submittedBy String?
+  status     ListingStatus @default(NOMINATED)
+  totalBids  Int      @default(0)
+  totalAmount Decimal @default(0) @db.Decimal(12, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  bids   Bid[]
+  ledger Ledger[]
+
+  @@unique([categoryId, slug])
+  @@index([seasonId])
+  @@index([status])
+  @@index([totalBids])
+  @@index([totalAmount])
+  @@map("listings")
+}
+
+enum ListingStatus {
+  NOMINATED
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+model Bid {
+  id         String   @id @default(cuid())
+  listingId  String
+  listing    Listing  @relation(fields: [listingId], references: [id])
+  userId     String
+  userEmail  String?
+  userName   String?
+  amount     Decimal  @db.Decimal(12, 2)
+  status     BidStatus @default(PENDING)
+  paymentId  String?
+  paymentStatus PaymentStatus @default(PENDING)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([listingId])
+  @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([listingId, createdAt])
+  @@map("bids")
+}
+
+enum BidStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+model Ledger {
+  id         String   @id @default(cuid())
+  listingId  String
+  listing    Listing  @relation(fields: [listingId], references: [id])
+  eventType  String
+  eventData  Json
+  amount     Decimal? @db.Decimal(12, 2)
+  userId     String?
+  createdAt  DateTime @default(now())
+
+  @@index([listingId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("ledger")
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  externalId  String   @unique
+  eventType   String
+  payload     Json
+  processed   Boolean  @default(false)
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([provider, eventType])
+  @@index([processed])
+  @@map("webhook_events")
+}
+
+model BoardSnapshot {
+  id         String   @id @default(cuid())
+  categoryId String
+  seasonId   String?
+  snapshotAt DateTime @default(now())
+  data       Json
+  createdAt  DateTime @default(now())
+
+  @@index([categoryId, snapshotAt])
+  @@index([seasonId])
+  @@map("board_snapshots")
+}
+
+model ModerationReview {
+  id         String   @id @default(cuid())
+  listingId  String?
+  bidId      String?
+  reviewerId String?
+  action     ModerationAction
+  reason     String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([listingId])
+  @@index([bidId])
+  @@index([action])
+  @@map("moderation_reviews")
+}
+
+enum ModerationAction {
+  APPROVE
+  REJECT
+  FLAG
+  HIDE
+  RESTORE
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  targetType  String
+  targetId    String
+  reporterId  String?
+  reporterEmail String?
+  reason      String
+  description String?
+  status      ReportStatus @default(PENDING)
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([targetType, targetId])
+  @@index([status])
+  @@map("reports")
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
